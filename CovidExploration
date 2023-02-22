@@ -1,0 +1,91 @@
+SELECT *
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is not null
+ORDER BY 3,4
+
+/* SELECT *
+FROM `CovidAnalytics.CovidVaccine`
+ORDER BY 3,4 */
+
+-- Select Data that we are going to use for analysis
+
+SELECT location, date, total_cases, new_cases, total_deaths, population
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is not null
+ORDER BY 1,2
+
+-- Looking at Total Cases vs Total Deaths in Canada
+-- Shows the likelihood of dying if you get covid in Canada
+
+SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+FROM `CovidAnalytics.CovidDeath`
+WHERE location = 'Canada' and continent is not null
+ORDER BY 1,2
+
+-- Looking at the Total Cases vs the Population
+
+SELECT location, date, total_cases, population, (total_cases/population)*100 as CovidPercentage
+FROM `CovidAnalytics.CovidDeath`
+WHERE location = 'Canada'
+ORDER BY 1,2
+
+-- Looking at countries with highest inflection rate
+
+SELECT location, population, MAX(total_cases) AS HighestInfelctionCount, MAX((total_cases/population))*100 as CovidPercentage
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is not null
+GROUP BY location, population
+ORDER BY CovidPercentage DESC
+
+-- Showing countries with the highest death count per population
+
+SELECT location, continent, MAX(total_deaths) AS TotalDeathCount
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is not null -- to exclude location like 'world' or 'Asia'
+GROUP BY location, continent
+ORDER BY TotalDeathCount DESC
+
+-- Here let's break down by continent
+
+SELECT location, MAX(total_deaths) AS TotalDeathCount
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is null
+GROUP BY location
+ORDER BY TotalDeathCount DESC
+
+-- Here is another way to break down by continent
+
+WITH CTE_CovidDeath AS
+(SELECT location, continent, MAX(total_deaths) AS TotalDeathCount
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is not null -- to exclude location like 'world' or 'Asia'
+GROUP BY location, continent
+)
+SELECT continent, SUM(CTE_CovidDeath.TotalDeathCount) AS TotalDeathCountPerContinent
+FROM CTE_CovidDeath
+GROUP BY continent
+ORDER BY TotalDeathCountPerContinent DESC
+
+-- GLOBAL NUMBERS
+
+SELECT date, SUM(new_cases) AS TotalCases, SUM(new_deaths) AS TotalDeaths, (SUM(new_deaths)/SUM(new_cases))*100 as DeathPercentage
+FROM `CovidAnalytics.CovidDeath`
+WHERE continent is not null
+GROUP BY date
+ORDER BY 1,2
+
+-- Let's take a look at Total Population vs Vaccinations
+
+-- Use CTE
+
+WITH PopvsVac AS
+(SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(vac.new_vaccinations) OVER (Partition by dea.location ORDER BY dea.location, dea.date) AS RollingPeopleVaccined
+FROM `CovidAnalytics.CovidDeath` dea
+JOIN `CovidAnalytics.CovidVaccine` vac
+  ON dea.location = vac.location
+  and dea.date = vac.date
+WHERE dea.continent is not null
+ORDER BY 2,3
+)
+SELECT *, (RollingPeopleVaccined/population)*100 AS VaccinedPercentage
+FROM PopvsVac
